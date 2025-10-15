@@ -1,322 +1,397 @@
-# Deployment Guide - SSH Server with CI/CD
+# Deployment Guide
 
-This guide will help you deploy the Flask application to your SSH server with automated CI/CD using GitHub Actions.
+Complete guide for deploying the Secure Flask API to a production server.
+
+## Server Information
+
+- **IP Address**: 172.237.101.94
+- **User**: root
+- **Port**: 22
+- **Deployment Directory**: /var/www/staff
 
 ## Prerequisites
 
-- Ubuntu/Debian server with SSH access
-- Python 3.8+ installed on server
-- Sudo privileges on server
-- GitHub repository
+Before deploying, ensure you have:
 
-## Step 1: Server Setup
+1. **SSH Access**: Your SSH key must be added to the server
+2. **Server Requirements**:
+   - Ubuntu 20.04+ or Debian 10+
+   - Root or sudo access
+   - At least 1GB RAM
+   - 10GB disk space
 
-### 1.1 Connect to Your Server
+## Quick Deployment
 
-```bash
-ssh user@your-server.com
-```
+### Step 1: Set Up SSH Access
 
-### 1.2 Install Required Packages
-
-```bash
-# Update system
-sudo apt update && sudo apt upgrade -y
-
-# Install Python and dependencies
-sudo apt install -y python3 python3-pip python3-venv nginx
-
-# Install Gunicorn
-sudo apt install -y gunicorn
-```
-
-### 1.3 Create Deployment Directory
+First, copy your SSH public key to the server:
 
 ```bash
-# Create directory for the application
-sudo mkdir -p /var/www/flask-app
-sudo chown $USER:www-data /var/www/flask-app
-sudo chmod 775 /var/www/flask-app
+ssh-copy-id -p 22 root@172.237.101.94
 ```
 
-### 1.4 Set Up Systemd Service
+If prompted, enter the root password.
+
+**Your SSH Public Key**:
+```
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOKnD8+DSg6WV5v24+PwP/3ydjqr4nrhFEz5mzBIOF71 derekilchuk@gmail.com
+```
+
+Alternatively, manually add the key:
+```bash
+# On the server
+mkdir -p ~/.ssh
+chmod 700 ~/.ssh
+echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOKnD8+DSg6WV5v24+PwP/3ydjqr4nrhFEz5mzBIOF71 derekilchuk@gmail.com" >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+```
+
+### Step 2: Run Deployment Script
+
+Once SSH access is configured, run the automated deployment script:
 
 ```bash
-# Copy the service file to systemd directory
-sudo cp flask-app.service /etc/systemd/system/
-
-# Update the service file with your deployment path and user
-sudo nano /etc/systemd/system/flask-app.service
-
-# Reload systemd and enable service
-sudo systemctl daemon-reload
-sudo systemctl enable flask-app
+chmod +x deploy.sh
+./deploy.sh
 ```
 
-### 1.5 Configure Nginx
+The script will automatically:
+1. Test SSH connection
+2. Install required system packages
+3. Create deployment directory
+4. Copy application files
+5. Set up Python virtual environment
+6. Configure environment variables
+7. Initialize database
+8. Set up Supervisor (process manager)
+9. Configure Nginx (web server)
+10. Verify deployment
+
+## Manual Deployment
+
+If you prefer to deploy manually, follow these steps:
+
+### 1. Install System Packages
 
 ```bash
-# Copy nginx configuration
-sudo cp nginx.conf /etc/nginx/sites-available/flask-app
-
-# Update with your domain name
-sudo nano /etc/nginx/sites-available/flask-app
-
-# Enable the site
-sudo ln -s /etc/nginx/sites-available/flask-app /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl restart nginx
+ssh root@172.237.101.94 << 'EOF'
+apt-get update -y
+apt-get install -y python3 python3-pip python3-venv nginx git supervisor
+EOF
 ```
 
-### 1.6 Set Up SSL (Optional but Recommended)
+### 2. Create Deployment Directory
 
 ```bash
-# Install Certbot
-sudo apt install -y certbot python3-certbot-nginx
-
-# Get SSL certificate
-sudo certbot --nginx -d your-domain.com -d www.your-domain.com
+ssh root@172.237.101.94 'mkdir -p /var/www/staff'
 ```
 
-## Step 2: GitHub Secrets Configuration
-
-### 2.1 Generate SSH Key Pair (On Your Local Machine)
+### 3. Copy Application Files
 
 ```bash
-# Generate new SSH key for deployment
-ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/github-deploy
-
-# Copy public key to server
-ssh-copy-id -i ~/.ssh/github-deploy.pub user@your-server.com
-
-# Display private key (copy this for GitHub)
-cat ~/.ssh/github-deploy
+rsync -avz --exclude='.git' --exclude='venv' --exclude='instance' \
+    --exclude='__pycache__' --exclude='.env' --exclude='*.pyc' \
+    . root@172.237.101.94:/var/www/staff/secure-flask-api/
 ```
 
-### 2.2 Add Secrets to GitHub
-
-Go to your GitHub repository: `Settings` → `Secrets and variables` → `Actions` → `New repository secret`
-
-Add the following secrets:
-
-| Secret Name | Value | Description |
-|------------|-------|-------------|
-| `SSH_PRIVATE_KEY` | Content of `~/.ssh/github-deploy` | Private SSH key for deployment |
-| `SSH_HOST` | `your-server.com` | Your server hostname or IP |
-| `SSH_USER` | `your-username` | SSH username |
-| `SSH_PORT` | `22` | SSH port (default 22) |
-| `DEPLOY_PATH` | `/var/www` | Deployment directory path |
-| `SECRET_KEY` | Generate with Python | Flask secret key |
-| `ADMIN_EMAIL` | `admin@yourdomain.com` | Admin user email |
-| `ADMIN_PASSWORD` | `your-secure-password` | Admin user password |
-
-### 2.3 Generate Flask Secret Key
+### 4. Set Up Virtual Environment
 
 ```bash
-python3 -c 'import secrets; print(secrets.token_hex(32))'
-```
-
-Copy the output and add it as `SECRET_KEY` in GitHub secrets.
-
-## Step 3: Server Sudoers Configuration
-
-The deployment script needs to restart the systemd service. Add this to sudoers:
-
-```bash
-sudo visudo
-```
-
-Add this line (replace `your-username` with your SSH user):
-
-```
-your-username ALL=(ALL) NOPASSWD: /bin/systemctl start flask-app, /bin/systemctl stop flask-app, /bin/systemctl restart flask-app, /bin/systemctl status flask-app
-```
-
-## Step 4: Test Deployment
-
-### 4.1 Manual Deployment Test
-
-Push to the main branch:
-
-```bash
-git add .
-git commit -m "Add CI/CD deployment"
-git push origin main
-```
-
-### 4.2 Monitor Deployment
-
-- Go to GitHub repository → `Actions` tab
-- Watch the deployment workflow run
-- Check for any errors
-
-### 4.3 Verify on Server
-
-```bash
-# Check if service is running
-sudo systemctl status flask-app
-
-# Check application logs
-sudo journalctl -u flask-app -f
-
-# Test the application
-curl http://localhost:8000
-curl https://your-domain.com
-```
-
-## Step 5: Deployment Workflow
-
-Once configured, deployment is automatic:
-
-1. Push code to `main` branch
-2. GitHub Actions triggers
-3. Tests run automatically
-4. If tests pass, deploys to server
-5. Server automatically restarts application
-6. Verifies deployment success
-
-## Troubleshooting
-
-### Deployment Fails
-
-```bash
-# Check GitHub Actions logs
-# View the error in the Actions tab
-
-# SSH into server and check logs
-ssh user@your-server.com
-sudo journalctl -u flask-app -n 50
-```
-
-### Application Won't Start
-
-```bash
-# Check service status
-sudo systemctl status flask-app
-
-# Check detailed logs
-sudo journalctl -u flask-app -xe
-
-# Check if port is in use
-sudo netstat -tlnp | grep 8000
-
-# Manually test the application
-cd /var/www/flask-app
+ssh root@172.237.101.94 << 'EOF'
+cd /var/www/staff/secure-flask-api
+python3 -m venv venv
 source venv/bin/activate
-python run.py
-```
-
-### Nginx Issues
-
-```bash
-# Test nginx configuration
-sudo nginx -t
-
-# Check nginx logs
-sudo tail -f /var/log/nginx/error.log
-
-# Restart nginx
-sudo systemctl restart nginx
-```
-
-### Permission Issues
-
-```bash
-# Fix permissions
-sudo chown -R www-data:www-data /var/www/flask-app
-sudo chmod -R 755 /var/www/flask-app
-sudo chmod 775 /var/www/flask-app/instance
-```
-
-## Security Best Practices
-
-1. **Use strong passwords** for admin accounts
-2. **Keep SSH keys secure** - never commit private keys
-3. **Enable firewall** on server:
-   ```bash
-   sudo ufw allow 22/tcp
-   sudo ufw allow 80/tcp
-   sudo ufw allow 443/tcp
-   sudo ufw enable
-   ```
-4. **Regular updates**:
-   ```bash
-   sudo apt update && sudo apt upgrade -y
-   ```
-5. **Monitor logs** regularly
-6. **Use SSL/TLS** for production
-7. **Set up automated backups**
-
-## Rollback Procedure
-
-If deployment fails, rollback to previous version:
-
-```bash
-ssh user@your-server.com
-cd /var/www
-
-# List available backups
-ls -lh backup-*.tar.gz
-
-# Restore from backup
-tar -xzf backup-YYYYMMDD-HHMMSS.tar.gz
-sudo systemctl restart flask-app
-```
-
-## Manual Deployment (Without CI/CD)
-
-If you need to deploy manually:
-
-```bash
-# On local machine
-tar -czf deploy.tar.gz --exclude='.git' --exclude='venv' .
-scp deploy.tar.gz user@your-server.com:/var/www/
-
-# On server
-ssh user@your-server.com
-cd /var/www
-tar -xzf deploy.tar.gz -C flask-app
-cd flask-app
-source venv/bin/activate
+pip install --upgrade pip
 pip install -r requirements.txt
-sudo systemctl restart flask-app
+pip install gunicorn
+EOF
 ```
 
-## Monitoring and Maintenance
+### 5. Configure Environment
+
+```bash
+ssh root@172.237.101.94 << 'EOF'
+cd /var/www/staff/secure-flask-api
+cp .env.example .env
+
+# Generate secure secret key
+SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
+
+# Update .env file
+sed -i "s/SECRET_KEY=your-secret-key-here/SECRET_KEY=${SECRET_KEY}/" .env
+sed -i "s/FLASK_ENV=development/FLASK_ENV=production/" .env
+sed -i "s|DATABASE_URL=sqlite:///instance/app.db|DATABASE_URL=sqlite:////var/www/staff/secure-flask-api/instance/app.db|" .env
+
+mkdir -p instance
+EOF
+```
+
+### 6. Initialize Database
+
+```bash
+ssh root@172.237.101.94 << 'EOF'
+cd /var/www/staff/secure-flask-api
+source venv/bin/activate
+export FLASK_ENV=production
+python3 -c "from app import create_app, db; app = create_app('production'); app.app_context().push(); db.create_all()"
+EOF
+```
+
+### 7. Configure Supervisor
+
+Create `/etc/supervisor/conf.d/secure-flask-api.conf` on the server:
+
+```ini
+[program:secure-flask-api]
+directory=/var/www/staff/secure-flask-api
+command=/var/www/staff/secure-flask-api/venv/bin/gunicorn -w 4 -b 127.0.0.1:8000 'app:create_app("production")'
+user=root
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+stderr_logfile=/var/log/secure-flask-api.err.log
+stdout_logfile=/var/log/secure-flask-api.out.log
+environment=PATH="/var/www/staff/secure-flask-api/venv/bin"
+```
+
+Then reload Supervisor:
+
+```bash
+ssh root@172.237.101.94 << 'EOF'
+supervisorctl reread
+supervisorctl update
+supervisorctl start secure-flask-api
+EOF
+```
+
+### 8. Configure Nginx
+
+Create `/etc/nginx/sites-available/secure-flask-api` on the server:
+
+```nginx
+server {
+    listen 80;
+    server_name 172.237.101.94;
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /static/ {
+        alias /var/www/staff/secure-flask-api/app/static/;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+}
+```
+
+Enable and restart Nginx:
+
+```bash
+ssh root@172.237.101.94 << 'EOF'
+rm -f /etc/nginx/sites-enabled/default
+ln -sf /etc/nginx/sites-available/secure-flask-api /etc/nginx/sites-enabled/
+nginx -t
+systemctl restart nginx
+systemctl enable nginx
+EOF
+```
+
+## Verification
+
+After deployment, verify the application is running:
+
+```bash
+curl http://172.237.101.94/
+```
+
+You should see the homepage HTML.
+
+## Access the Application
+
+- **Homepage**: http://172.237.101.94/
+- **Login**: http://172.237.101.94/auth/login
+- **Register**: http://172.237.101.94/auth/register
+- **API Documentation**: http://172.237.101.94/api/
+
+## Default Credentials
+
+- **Username**: admin
+- **Password**: changeme123
+
+**⚠️ IMPORTANT**: Change the admin password immediately after first login!
+
+## Management Commands
 
 ### View Logs
 
 ```bash
 # Application logs
-sudo journalctl -u flask-app -f
+ssh root@172.237.101.94 'tail -f /var/log/secure-flask-api.out.log'
+
+# Error logs
+ssh root@172.237.101.94 'tail -f /var/log/secure-flask-api.err.log'
 
 # Nginx access logs
-sudo tail -f /var/log/nginx/flask-app-access.log
+ssh root@172.237.101.94 'tail -f /var/log/nginx/access.log'
 
 # Nginx error logs
-sudo tail -f /var/log/nginx/flask-app-error.log
+ssh root@172.237.101.94 'tail -f /var/log/nginx/error.log'
 ```
 
-### Database Backup
+### Control Application
+
+```bash
+# Restart application
+ssh root@172.237.101.94 'supervisorctl restart secure-flask-api'
+
+# Stop application
+ssh root@172.237.101.94 'supervisorctl stop secure-flask-api'
+
+# Start application
+ssh root@172.237.101.94 'supervisorctl start secure-flask-api'
+
+# Check status
+ssh root@172.237.101.94 'supervisorctl status secure-flask-api'
+```
+
+### Update Application
+
+To update the application after making changes:
+
+```bash
+# 1. Copy updated files
+rsync -avz --exclude='.git' --exclude='venv' --exclude='instance' \
+    --exclude='__pycache__' --exclude='.env' --exclude='*.pyc' \
+    . root@172.237.101.94:/var/www/staff/secure-flask-api/
+
+# 2. Restart application
+ssh root@172.237.101.94 'supervisorctl restart secure-flask-api'
+```
+
+## SSL/HTTPS Setup (Optional)
+
+For production, it's highly recommended to use HTTPS. Install Let's Encrypt SSL certificate:
+
+```bash
+ssh root@172.237.101.94 << 'EOF'
+# Install certbot
+apt-get install -y certbot python3-certbot-nginx
+
+# Get certificate (replace with your domain)
+certbot --nginx -d yourdomain.com
+
+# Auto-renewal
+certbot renew --dry-run
+EOF
+```
+
+## Firewall Configuration
+
+Configure UFW firewall for security:
+
+```bash
+ssh root@172.237.101.94 << 'EOF'
+# Allow SSH
+ufw allow 22/tcp
+
+# Allow HTTP
+ufw allow 80/tcp
+
+# Allow HTTPS (if using SSL)
+ufw allow 443/tcp
+
+# Enable firewall
+ufw --force enable
+
+# Check status
+ufw status
+EOF
+```
+
+## Troubleshooting
+
+### Application Not Starting
+
+Check logs:
+```bash
+ssh root@172.237.101.94 'tail -50 /var/log/secure-flask-api.err.log'
+```
+
+### Nginx Errors
+
+Test configuration:
+```bash
+ssh root@172.237.101.94 'nginx -t'
+```
+
+View error log:
+```bash
+ssh root@172.237.101.94 'tail -50 /var/log/nginx/error.log'
+```
+
+### Database Issues
+
+Reinitialize database:
+```bash
+ssh root@172.237.101.94 << 'EOF'
+cd /var/www/staff/secure-flask-api
+source venv/bin/activate
+rm -f instance/app.db
+python3 -c "from app import create_app, db; app = create_app('production'); app.app_context().push(); db.create_all()"
+supervisorctl restart secure-flask-api
+EOF
+```
+
+## Security Recommendations
+
+1. **Change Admin Password**: Immediately after deployment
+2. **Use HTTPS**: Install SSL certificate with Let's Encrypt
+3. **Update Regularly**: Keep system and packages updated
+4. **Backup Database**: Regular backups of `instance/app.db`
+5. **Monitor Logs**: Check logs regularly for suspicious activity
+6. **Firewall**: Use UFW to restrict access
+7. **Fail2Ban**: Install fail2ban to prevent brute-force attacks
+
+## Performance Tuning
+
+For better performance:
+
+1. **Increase Gunicorn Workers**: Edit supervisor config, change `-w 4` to `-w 8` (2x CPU cores)
+2. **Use PostgreSQL**: For production, use PostgreSQL instead of SQLite
+3. **Add Redis**: For session storage and caching
+4. **Enable Gzip**: In Nginx configuration
+5. **CDN**: Use a CDN for static assets
+
+## Backup Strategy
+
+Create regular backups:
 
 ```bash
 # Backup database
-cd /var/www/flask-app
-tar -czf db-backup-$(date +%Y%m%d).tar.gz instance/
+ssh root@172.237.101.94 'cd /var/www/staff/secure-flask-api && tar -czf ~/backup-$(date +%Y%m%d).tar.gz instance/'
 
-# Download backup to local
-scp user@your-server.com:/var/www/flask-app/db-backup-*.tar.gz .
+# Download backup
+scp root@172.237.101.94:~/backup-*.tar.gz ./backups/
 ```
 
 ## Support
 
-For issues:
-1. Check GitHub Actions logs
-2. Check server logs: `sudo journalctl -u flask-app`
-3. Verify secrets are correctly set in GitHub
-4. Ensure server has internet access
-5. Check firewall rules
+For issues or questions:
+- Check logs first
+- Review this documentation
+- Check GitHub repository: https://github.com/alaptov/secure-flask-api
 
 ---
 
-**Deployment Status**: Ready for production use with proper configuration.
+**Deployed with security and performance in mind!**
