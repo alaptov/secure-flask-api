@@ -1,0 +1,23 @@
+[Unit]
+Description=Secure Flask API Application
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/flask-app
+Environment="PATH=/var/www/flask-app/venv/bin"
+ExecStart=/var/www/flask-app/venv/bin/gunicorn -w 4 -b 0.0.0.0:8000 'app:create_app("production")'
+Restart=always
+RestartSec=10
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/www/flask-app/instance
+
+[Install]
+WantedBy=multi-user.target

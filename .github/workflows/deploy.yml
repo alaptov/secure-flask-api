@@ -1,0 +1,156 @@
+name: Deploy to SSH Server
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run basic tests
+        run: |
+          python -c "from app import create_app; app = create_app('testing'); print('App created successfully')"
+
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to server
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        run: |
+          # Create deployment package
+          tar -czf deploy.tar.gz \
+            --exclude='.git' \
+            --exclude='venv' \
+            --exclude='instance' \
+            --exclude='__pycache__' \
+            --exclude='.env' \
+            --exclude='*.pyc' \
+            .
+
+          # Copy files to server
+          scp -P ${SSH_PORT} deploy.tar.gz ${SSH_USER}@${SSH_HOST}:${DEPLOY_PATH}/
+
+          # Execute deployment script on server
+          ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} << 'ENDSSH'
+            set -e
+            cd ${DEPLOY_PATH}
+
+            # Backup current deployment
+            if [ -d "flask-app" ]; then
+              echo "Creating backup..."
+              tar -czf backup-$(date +%Y%m%d-%H%M%S).tar.gz flask-app
+              # Keep only last 5 backups
+              ls -t backup-*.tar.gz | tail -n +6 | xargs -r rm
+            fi
+
+            # Extract new deployment
+            mkdir -p flask-app
+            tar -xzf deploy.tar.gz -C flask-app
+            rm deploy.tar.gz
+
+            cd flask-app
+
+            # Create virtual environment if it doesn't exist
+            if [ ! -d "venv" ]; then
+              echo "Creating virtual environment..."
+              python3 -m venv venv
+            fi
+
+            # Activate virtual environment and install dependencies
+            source venv/bin/activate
+            pip install --upgrade pip
+            pip install -r requirements.txt
+
+            # Create .env file if it doesn't exist
+            if [ ! -f ".env" ]; then
+              echo "Creating .env file..."
+              cp .env.example .env
+              sed -i "s|SECRET_KEY=your-secret-key-here|SECRET_KEY=${SECRET_KEY}|g" .env
+              sed -i "s|ADMIN_EMAIL=admin@example.com|ADMIN_EMAIL=${ADMIN_EMAIL}|g" .env
+              sed -i "s|ADMIN_PASSWORD=changeme123|ADMIN_PASSWORD=${ADMIN_PASSWORD}|g" .env
+              sed -i "s|FLASK_ENV=development|FLASK_ENV=production|g" .env
+              sed -i "s|DATABASE_URL=sqlite:////Users/augustineodonkor/staff/flask-app/instance/app.db|DATABASE_URL=sqlite:///${DEPLOY_PATH}/flask-app/instance/app.db|g" .env
+            fi
+
+            # Create instance directory
+            mkdir -p instance
+
+            # Restart application (using systemd service)
+            if systemctl is-active --quiet flask-app; then
+              echo "Restarting Flask application..."
+              sudo systemctl restart flask-app
+            else
+              echo "Starting Flask application..."
+              sudo systemctl start flask-app
+            fi
+
+            echo "Deployment completed successfully!"
+          ENDSSH
+
+      - name: Verify deployment
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} << 'ENDSSH'
+            if systemctl is-active --quiet flask-app; then
+              echo "✅ Application is running"
+              sudo systemctl status flask-app --no-pager
+            else
+              echo "❌ Application failed to start"
+              exit 1
+            fi
+          ENDSSH
+
+      - name: Send deployment notification
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "🚀 Deployment successful!"
+          else
+            echo "❌ Deployment failed!"
+          fi
