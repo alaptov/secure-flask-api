@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-8">
+        About Secure Flask API
+    </h1>
+
+    <div class="prose dark:prose-invert max-w-none">
+        <div class="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-6 mb-6">
+            <h2 class="text-2xl font-semibold text-gray-900 dark:text-white mb-4">
+                Built with Security in Mind
+            </h2>
+            <p class="text-gray-600 dark:text-gray-400 mb-4">
+                This is a production-ready Flask application demonstrating security best practices
+                for web applications and REST APIs. It implements multiple layers of security
+                to protect user data and prevent common web vulnerabilities.
+            </p>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-6 mb-6">
+            <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                Technology Stack
+            </h3>
+            <ul class="space-y-2 text-gray-600 dark:text-gray-400">
+                <li class="flex items-start">
+                    <span class="text-blue-600 mr-2">•</span>
+                    <span><strong>Flask:</strong> Modern Python web framework</span>
+                </li>
+                <li class="flex items-start">
+                    <span class="text-blue-600 mr-2">•</span>
+                    <span><strong>SQLAlchemy:</strong> Python SQL toolkit and ORM</span>
+                </li>
+                <li class="flex items-start">
+                    <span class="text-blue-600 mr-2">•</span>
+                    <span><strong>Flask-Bcrypt:</strong> Password hashing with bcrypt</span>
+                </li>
+                <li class="flex items-start">
+                    <span class="text-blue-600 mr-2">•</span>
+                    <span><strong>Flask-WTF:</strong> Form validation and CSRF protection</span>
+                </li>
+                <li class="flex items-start">
+                    <span class="text-blue-600 mr-2">•</span>
+                    <span><strong>Flask-Login:</strong> User session management</span>
+                </li>
+                <li class="flex items-start">
+                    <span class="text-blue-600 mr-2">•</span>
+                    <span><strong>Flask-Limiter:</strong> Rate limiting for API endpoints</span>
+                </li>
+                <li class="flex items-start">
+                    <span class="text-blue-600 mr-2">•</span>
+                    <span><strong>Flask-Talisman:</strong> Security headers and HTTPS enforcement</span>
+                </li>
+                <li class="flex items-start">
+                    <span class="text-blue-600 mr-2">•</span>
+                    <span><strong>Preline CSS:</strong> Modern Tailwind CSS component library</span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-6">
+            <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                Security Features
+            </h3>
+            <ul class="space-y-2 text-gray-600 dark:text-gray-400">
+                <li class="flex items-start">
+                    <span class="text-green-600 mr-2">✓</span>
+                    <span>Bcrypt password hashing with configurable cost factor</span>
+                </li>
+                <li class="flex items-start">
+                    <span class="text-green-600 mr-2">✓</span>
+                    <span>CSRF protection on all forms</span>
+                </li>
+                <li class="flex items-start">
+                    <span class="text-green-600 mr-2">✓</span>
+                    <span>Rate limiting to prevent brute-force attacks</span>
+                </li>
+                <li class="flex items-start">
+                    <span class="text-green-600 mr-2">✓</span>
+                    <span>Account lockout after failed login attempts</span>
+                </li>
+                <li class="flex items-start">
+                    <span class="text-green-600 mr-2">✓</span>
+                    <span>Secure session management with httpOnly cookies</span>
+                </li>
+                <li class="flex items-start">
+                    <span class="text-green-600 mr-2">✓</span>
+                    <span>Security headers (CSP, HSTS, X-Frame-Options)</span>
+                </li>
+                <li class="flex items-start">
+                    <span class="text-green-600 mr-2">✓</span>
+                    <span>API key authentication for programmatic access</span>
+                </li>
+                <li class="flex items-start">
+                    <span class="text-green-600 mr-2">✓</span>
+                    <span>Strong password requirements</span>
+                </li>
+                <li class="flex items-start">
+                    <span class="text-green-600 mr-2">✓</span>
+                    <span>Environment-based configuration</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

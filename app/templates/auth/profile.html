@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-8">
+        Profile Settings
+    </h1>
+
+    <div class="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-6">
+        <form method="POST" action="{{ url_for('auth.profile') }}">
+            {{ form.hidden_tag() }}
+
+            <div class="space-y-6">
+                <!-- Username (Read-only) -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Username
+                    </label>
+                    <input type="text" value="{{ current_user.username }}" readonly
+                           class="appearance-none block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed sm:text-sm">
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Username cannot be changed</p>
+                </div>
+
+                <!-- Email -->
+                <div>
+                    {{ form.email.label(class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1") }}
+                    {{ form.email(class="appearance-none block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:text-white") }}
+                    {% if form.email.errors %}
+                        <div class="mt-1 text-sm text-red-600">
+                            {% for error in form.email.errors %}
+                                <p>{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- Submit Button -->
+                <div class="flex items-center justify-between">
+                    {{ form.submit(class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium cursor-pointer") }}
+                    <a href="{{ url_for('auth.change_password') }}"
+                       class="text-sm text-blue-600 hover:text-blue-500 font-medium">
+                        Change Password
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Account Information -->
+    <div class="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-6 mt-6">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            Account Information
+        </h2>
+        <dl class="space-y-3">
+            <div class="flex justify-between">
+                <dt class="text-sm text-gray-500 dark:text-gray-400">Account Status</dt>
+                <dd class="text-sm font-medium text-gray-900 dark:text-white">
+                    {% if current_user.is_active %}
+                        <span class="text-green-600">Active</span>
+                    {% else %}
+                        <span class="text-red-600">Inactive</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-sm text-gray-500 dark:text-gray-400">Role</dt>
+                <dd class="text-sm font-medium text-gray-900 dark:text-white">
+                    {% if current_user.is_admin %}Administrator{% else %}User{% endif %}
+                </dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-sm text-gray-500 dark:text-gray-400">Member Since</dt>
+                <dd class="text-sm font-medium text-gray-900 dark:text-white">
+                    {{ current_user.created_at.strftime('%B %d, %Y') }}
+                </dd>
+            </div>
+            {% if current_user.last_login %}
+            <div class="flex justify-between">
+                <dt class="text-sm text-gray-500 dark:text-gray-400">Last Login</dt>
+                <dd class="text-sm font-medium text-gray-900 dark:text-white">
+                    {{ current_user.last_login.strftime('%B %d, %Y at %I:%M %p') }}
+                </dd>
+            </div>
+            {% endif %}
+        </dl>
+    </div>
+</div>
+{% endblock %}
