@@ -71,27 +71,27 @@ jobs:
             .
 
           # Copy files to server
-          scp -P ${SSH_PORT} deploy.tar.gz ${SSH_USER}@${SSH_HOST}:${DEPLOY_PATH}/
+          scp -P ${SSH_PORT} deploy.tar.gz ${SSH_USER}@${SSH_HOST}:/var/www/staff/
 
           # Execute deployment script on server
-          ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} << 'ENDSSH'
+          ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} << ENDSSH
             set -e
-            cd ${DEPLOY_PATH}
+            cd /var/www/staff
 
             # Backup current deployment
-            if [ -d "flask-app" ]; then
+            if [ -d "secure-flask-api" ]; then
               echo "Creating backup..."
-              tar -czf backup-$(date +%Y%m%d-%H%M%S).tar.gz flask-app
+              tar -czf backup-\$(date +%Y%m%d-%H%M%S).tar.gz secure-flask-api
               # Keep only last 5 backups
               ls -t backup-*.tar.gz | tail -n +6 | xargs -r rm
             fi
 
             # Extract new deployment
-            mkdir -p flask-app
-            tar -xzf deploy.tar.gz -C flask-app
+            mkdir -p secure-flask-api
+            tar -xzf deploy.tar.gz -C secure-flask-api
             rm deploy.tar.gz
 
-            cd flask-app
+            cd secure-flask-api
 
             # Create virtual environment if it doesn't exist
             if [ ! -d "venv" ]; then
@@ -103,6 +103,7 @@ jobs:
             source venv/bin/activate
             pip install --upgrade pip
             pip install -r requirements.txt
+            pip install gunicorn
 
             # Create .env file if it doesn't exist
             if [ ! -f ".env" ]; then
@@ -112,20 +113,14 @@ jobs:
               sed -i "s|ADMIN_EMAIL=admin@example.com|ADMIN_EMAIL=${ADMIN_EMAIL}|g" .env
               sed -i "s|ADMIN_PASSWORD=changeme123|ADMIN_PASSWORD=${ADMIN_PASSWORD}|g" .env
               sed -i "s|FLASK_ENV=development|FLASK_ENV=production|g" .env
-              sed -i "s|DATABASE_URL=sqlite:////Users/augustineodonkor/staff/flask-app/instance/app.db|DATABASE_URL=sqlite:///${DEPLOY_PATH}/flask-app/instance/app.db|g" .env
+              sed -i "s|DATABASE_URL=sqlite:///instance/app.db|DATABASE_URL=sqlite:////var/www/staff/secure-flask-api/instance/app.db|g" .env
             fi
 
             # Create instance directory
             mkdir -p instance
 
-            # Restart application (using systemd service)
-            if systemctl is-active --quiet flask-app; then
-              echo "Restarting Flask application..."
-              sudo systemctl restart flask-app
-            else
-              echo "Starting Flask application..."
-              sudo systemctl start flask-app
-            fi
+            # Restart application (using Supervisor)
+            supervisorctl restart secure-flask-api
 
             echo "Deployment completed successfully!"
           ENDSSH
@@ -137,11 +132,12 @@ jobs:
           SSH_PORT: ${{ secrets.SSH_PORT }}
         run: |
           ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} << 'ENDSSH'
-            if systemctl is-active --quiet flask-app; then
+            if supervisorctl status secure-flask-api | grep -q RUNNING; then
               echo "✅ Application is running"
-              sudo systemctl status flask-app --no-pager
+              supervisorctl status secure-flask-api
             else
               echo "❌ Application failed to start"
+              supervisorctl status secure-flask-api
               exit 1
             fi
           ENDSSH
