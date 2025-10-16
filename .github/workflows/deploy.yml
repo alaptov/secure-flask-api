@@ -68,7 +68,8 @@ jobs:
             --exclude='__pycache__' \
             --exclude='.env' \
             --exclude='*.pyc' \
-            .
+            --warning=no-file-changed \
+            . || [ $? -eq 1 ]
 
           # Copy files to server
           scp -P ${SSH_PORT} deploy.tar.gz ${SSH_USER}@${SSH_HOST}:/var/www/staff/
