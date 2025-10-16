@@ -132,6 +132,8 @@ jobs:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_PORT: ${{ secrets.SSH_PORT }}
         run: |
+          echo "Waiting for application to start..."
+          sleep 10
           ssh -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} << 'ENDSSH'
             if supervisorctl status secure-flask-api | grep -q RUNNING; then
               echo "✅ Application is running"
